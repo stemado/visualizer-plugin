@@ -1,0 +1,123 @@
+// tests/session-manager.test.js
+const { describe, it, beforeEach } = require('node:test');
+const assert = require('node:assert');
+
+describe('SessionManager', () => {
+  let SessionManager, manager;
+
+  beforeEach(() => {
+    SessionManager = require('../src/session-manager');
+    // Disable timeouts in tests to avoid flakiness
+    manager = new SessionManager({ timeoutMs: 0 });
+  });
+
+  it('should create a session with a unique id', () => {
+    const session = manager.create({ port: 50000, url: 'http://localhost:50000' });
+    assert.ok(session.id);
+    assert.strictEqual(session.port, 50000);
+    assert.strictEqual(session.url, 'http://localhost:50000');
+    assert.deepStrictEqual(session.events, []);
+    assert.strictEqual(session.currentHtml, null);
+    assert.strictEqual(session.screenIndex, 0);
+    assert.ok(session.lastActivity);
+  });
+
+  it('should retrieve a session by id', () => {
+    const created = manager.create({ port: 50000, url: 'http://localhost:50000' });
+    const retrieved = manager.get(created.id);
+    assert.strictEqual(retrieved.id, created.id);
+  });
+
+  it('should return null for unknown session id', () => {
+    assert.strictEqual(manager.get('nonexistent'), null);
+  });
+
+  it('should list all sessions', () => {
+    manager.create({ port: 50001, url: 'http://localhost:50001' });
+    manager.create({ port: 50002, url: 'http://localhost:50002' });
+    const sessions = manager.list();
+    assert.strictEqual(sessions.length, 2);
+  });
+
+  it('should push a screen and increment index', () => {
+    const session = manager.create({ port: 50000, url: 'http://localhost:50000' });
+    manager.pushScreen(session.id, '<h2>Hello</h2>');
+    const updated = manager.get(session.id);
+    assert.strictEqual(updated.currentHtml, '<h2>Hello</h2>');
+    assert.strictEqual(updated.screenIndex, 1);
+  });
+
+  it('should clear events when pushing a new screen', () => {
+    const session = manager.create({ port: 50000, url: 'http://localhost:50000' });
+    manager.addEvent(session.id, { type: 'click', choice: 'a' });
+    assert.strictEqual(manager.get(session.id).events.length, 1);
+
+    manager.pushScreen(session.id, '<h2>New</h2>');
+    assert.strictEqual(manager.get(session.id).events.length, 0);
+  });
+
+  it('should add events to the session', () => {
+    const session = manager.create({ port: 50000, url: 'http://localhost:50000' });
+    manager.addEvent(session.id, { type: 'click', choice: 'a' });
+    manager.addEvent(session.id, { type: 'click', choice: 'b' });
+    assert.strictEqual(manager.get(session.id).events.length, 2);
+  });
+
+  it('should get events since a timestamp', () => {
+    const session = manager.create({ port: 50000, url: 'http://localhost:50000' });
+    const now = Date.now();
+    manager.addEvent(session.id, { type: 'click', choice: 'a', timestamp: now - 1000 });
+    manager.addEvent(session.id, { type: 'click', choice: 'b', timestamp: now + 1000 });
+    const recent = manager.getEvents(session.id, now);
+    assert.strictEqual(recent.length, 1);
+    assert.strictEqual(recent[0].choice, 'b');
+  });
+
+  it('should clear events after read when clear flag is set', () => {
+    const session = manager.create({ port: 50000, url: 'http://localhost:50000' });
+    manager.addEvent(session.id, { type: 'click', choice: 'a' });
+    manager.addEvent(session.id, { type: 'click', choice: 'b' });
+
+    const events = manager.getEvents(session.id, undefined, true);
+    assert.strictEqual(events.length, 2);
+
+    const again = manager.getEvents(session.id);
+    assert.strictEqual(again.length, 0, 'events should be cleared after read');
+  });
+
+  it('should update session fields via update()', () => {
+    const session = manager.create({ port: 0, url: '' });
+    manager.update(session.id, { port: 54321, url: 'http://localhost:54321' });
+    const updated = manager.get(session.id);
+    assert.strictEqual(updated.port, 54321);
+    assert.strictEqual(updated.url, 'http://localhost:54321');
+  });
+
+  it('should enforce max concurrent sessions', () => {
+    const m = new SessionManager({ timeoutMs: 0, maxSessions: 2 });
+    m.create({ port: 1, url: '' });
+    m.create({ port: 2, url: '' });
+    assert.throws(() => m.create({ port: 3, url: '' }), /Maximum 2/);
+  });
+
+  it('should auto-destroy session after timeout', async () => {
+    let timedOutId = null;
+    const m = new SessionManager({
+      timeoutMs: 50,
+      onTimeout: (id) => { timedOutId = id; }
+    });
+    const session = m.create({ port: 50000, url: '' });
+
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    assert.strictEqual(m.get(session.id), null, 'session should be destroyed');
+    assert.strictEqual(timedOutId, session.id, 'onTimeout callback should fire');
+  });
+
+  it('should destroy a session', () => {
+    const session = manager.create({ port: 50000, url: 'http://localhost:50000' });
+    manager.destroy(session.id);
+    assert.strictEqual(manager.get(session.id), null);
+    assert.strictEqual(manager.list().length, 0);
+  });
+});
