@@ -1,0 +1,17 @@
+{
+  "name": "visualizer",
+  "version": "0.1.0",
+  "description": "MCP server for interactive HTML visualizations in the browser",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test tests/*.test.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "express": "^4.21.0",
+    "ws": "^8.18.0",
+    "zod": "^3.23.8"
+  },
+  "license": "MIT"
+}
