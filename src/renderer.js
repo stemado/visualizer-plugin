@@ -43,4 +43,4 @@ function render(html) {
   return output;
 }
 
-module.exports = { render, isFullDocument };
+module.exports = { render, isFullDocument, wrapInFrame };
