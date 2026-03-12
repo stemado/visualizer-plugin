@@ -1,7 +1,7 @@
 {
   "name": "visualizer",
   "description": "Interactive HTML visualization companion — push diagrams, mockups, and explorers to a browser window",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": { "name": "sdoherty" },
   "license": "MIT"
 }

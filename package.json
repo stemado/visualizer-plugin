@@ -1,6 +1,6 @@
 {
   "name": "visualizer",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "MCP server for interactive HTML visualizations in the browser",
   "main": "src/index.js",
   "scripts": {
