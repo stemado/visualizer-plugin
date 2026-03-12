@@ -18,7 +18,7 @@ const serverStates = new WeakMap();
  * @param {string} sessionId
  * @returns {{ server: http.Server, app: express.Application, broadcastReload: () => void }}
  */
-function createHttpServer(manager, sessionId) {
+function createHttpServer(manager, sessionId, archive) {
   const app = express();
   const server = http.createServer(app);
   const wss = new WebSocket.Server({ server });
@@ -55,6 +55,19 @@ function createHttpServer(manager, sessionId) {
       ? render(session.currentHtml)
       : render(WAITING_PAGE);
     res.type('html').send(html);
+  });
+
+  app.get('/archive/manifest', (req, res) => {
+    if (!archive) return res.json({ screens: [] });
+    res.json(archive.getManifest(sessionId));
+  });
+
+  app.get('/archive/:index', (req, res) => {
+    if (!archive) return res.status(404).send('Archive not available');
+    const index = parseInt(req.params.index, 10);
+    const html = archive.getArchivedScreen(sessionId, index);
+    if (!html) return res.status(404).send('Screen not found');
+    res.type('html').send(render(html, { archiveIndex: index }));
   });
 
   return { server, app, broadcastReload };

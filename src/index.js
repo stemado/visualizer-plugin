@@ -4,12 +4,16 @@ const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio
 const { z } = require('zod');
 const SessionManager = require('./session-manager');
 const createMcpTools = require('./mcp-server');
+const ArchiveManager = require('./archive-manager');
 
+const projectDir = process.cwd();
+const archive = new ArchiveManager(projectDir);
 const manager = new SessionManager({
   timeoutMs: 30 * 60 * 1000, // 30 min inactivity timeout
   maxSessions: 5,
+  archive,
 });
-const tools = createMcpTools(manager);
+const tools = createMcpTools(manager, archive);
 
 const server = new McpServer({
   name: 'visualizer',
@@ -30,7 +34,8 @@ server.tool(
   'Push HTML content to the browser. Fragments are auto-wrapped in a themed frame. Full documents (starting with <!DOCTYPE or <html) are served as-is. Clears previous user events.',
   {
     session_id: z.string().describe('Session ID from launch_session'),
-    html: z.string().describe('HTML content — fragment or full document')
+    html: z.string().describe('HTML content — fragment or full document'),
+    title: z.string().optional().describe('Screen title for archive labeling'),
   },
   async (args) => ({
     content: [{ type: 'text', text: JSON.stringify(await tools.push_screen(args)) }]
@@ -61,10 +66,19 @@ server.tool(
 
 server.tool(
   'close_session',
-  'Stop a visualization session and clean up its HTTP server.',
+  'Stop a visualization session and clean up its HTTP server. Generates a static gallery at .visualizer/archive/<session_id>/index.html.',
   { session_id: z.string().describe('Session ID to close') },
   async (args) => ({
     content: [{ type: 'text', text: JSON.stringify(await tools.close_session(args)) }]
+  })
+);
+
+server.tool(
+  'generate_gallery',
+  'Generate a static HTML gallery page for an archived session. Called automatically on close, but can be used for mid-session snapshots.',
+  { session_id: z.string().describe('Session ID to generate gallery for') },
+  async (args) => ({
+    content: [{ type: 'text', text: JSON.stringify(await tools.generate_gallery(args)) }]
   })
 );
 

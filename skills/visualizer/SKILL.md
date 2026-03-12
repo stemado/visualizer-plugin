@@ -24,7 +24,7 @@ When the user asks to **see** something, not just read about it:
 
 1. Call `launch_session` to start the server
 2. Tell the user to open the URL in their browser
-3. Call `push_screen` with HTML content
+3. Call `push_screen` with HTML content and an optional `title` (e.g., "layout-options", "color-palette")
 4. Tell the user what's on screen, ask them to interact
 5. On next turn, call `get_events` to read their clicks
 6. Iterate until done
@@ -110,6 +110,33 @@ Load a template from `templates/` to guide your HTML generation for specific vis
 | `data-explorer.md` | Data queries, pipeline builders, schema explorers |
 | `flowchart.md` | Process flows, state machines, decision trees |
 | `dashboard.md` | Metric displays, KPI layouts, status boards |
+
+## Screen Archiving
+
+Every screen you push is automatically archived to `.visualizer/archive/` in the project directory. This provides:
+
+- **In-session navigation**: A sidebar in the browser lets the user flip back to earlier screens
+- **Post-session gallery**: When you close the session, a static `index.html` gallery is generated that works without the server
+
+### Title Parameter
+
+When calling `push_screen`, include a descriptive `title` to label the screen in the archive:
+
+```json
+{ "session_id": "abc123", "html": "<h2>Layout</h2>...", "title": "homepage-layout" }
+```
+
+Titles appear in the sidebar and gallery. They're optional but recommended.
+
+### Gallery Generation
+
+The `generate_gallery` tool creates a static HTML gallery at any time:
+
+```json
+{ "session_id": "abc123" }
+```
+
+Returns `{ "path": ".visualizer/archive/abc123/index.html" }`. This is called automatically on `close_session`, but you can call it mid-session for a snapshot.
 
 ## Session Lifecycle
 

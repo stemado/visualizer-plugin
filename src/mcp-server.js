@@ -3,9 +3,10 @@ const createHttpServer = require('./http-server');
 
 /**
  * @param {import('./session-manager')} manager
+ * @param {import('./archive-manager')} [archive]
  * @returns {Record<string, (args: any) => Promise<any>>}
  */
-function createMcpTools(manager) {
+function createMcpTools(manager, archive) {
   /** @type {Map<string, { server: import('http').Server, broadcastReload: () => void }>} */
   const httpServers = new Map();
 
@@ -16,6 +17,11 @@ function createMcpTools(manager) {
       httpState.server.close();
       httpServers.delete(id);
     }
+    // Generate gallery — destroy already called by timer before onTimeout
+    if (archive) {
+      try { archive.generateGallery(id); }
+      catch (e) { console.warn('[mcp] gallery generation on timeout failed:', e.message); }
+    }
   };
 
   return {
@@ -24,7 +30,7 @@ function createMcpTools(manager) {
 
       // Create session with placeholder port (updated after bind)
       const session = manager.create({ port: 0, url: '' });
-      const { server, broadcastReload } = createHttpServer(manager, session.id);
+      const { server, broadcastReload } = createHttpServer(manager, session.id, archive);
 
       try {
         const port = await new Promise((resolve, reject) => {
@@ -44,11 +50,11 @@ function createMcpTools(manager) {
       }
     },
 
-    async push_screen({ session_id, html }) {
+    async push_screen({ session_id, html, title }) {
       const session = manager.get(session_id);
       if (!session) throw new Error(`Session ${session_id} not found`);
 
-      manager.pushScreen(session_id, html);
+      manager.pushScreen(session_id, html, title);
 
       const httpState = httpServers.get(session_id);
       if (httpState) {
@@ -75,9 +81,21 @@ function createMcpTools(manager) {
         await new Promise(resolve => httpState.server.close(resolve));
         httpServers.delete(session_id);
       }
-      manager.destroy(session_id);
+      manager.destroy(session_id, 'explicit');
+      // Generate gallery after destroy (session-meta already written)
+      if (archive) {
+        try { archive.generateGallery(session_id); }
+        catch (e) { console.warn('[mcp] gallery generation on close failed:', e.message); }
+      }
       return { closed: true };
-    }
+    },
+
+    async generate_gallery({ session_id }) {
+      if (!archive) throw new Error('Archive not available');
+      const galleryPath = archive.generateGallery(session_id);
+      if (!galleryPath) throw new Error(`No screens to generate gallery for session ${session_id}`);
+      return { path: galleryPath };
+    },
   };
 }
 

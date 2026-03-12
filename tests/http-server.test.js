@@ -89,6 +89,58 @@ describe('HTTP Server', () => {
     assert.strictEqual(events[0].choice, 'a');
   });
 
+  it('should serve archive manifest as JSON', async () => {
+    createHttpServer = require('../src/http-server');
+    SessionManager = require('../src/session-manager');
+    const ArchiveManager = require('../src/archive-manager');
+    const os = require('os');
+    const fs = require('fs');
+    const path = require('path');
+
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'viz-http-'));
+    const archive = new ArchiveManager(tmpDir);
+    manager = new SessionManager({ timeoutMs: 0, archive });
+    const session = manager.create({ port: 0, url: '' });
+    manager.pushScreen(session.id, '<h2>Test</h2>', 'test-screen');
+
+    const { server } = createHttpServer(manager, session.id, archive);
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    const port = server.address().port;
+    servers.push(server);
+
+    const { body } = await httpGet(port, '/archive/manifest');
+    const manifest = JSON.parse(body);
+    assert.strictEqual(manifest.screens.length, 1);
+    assert.strictEqual(manifest.screens[0].title, 'test-screen');
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('should serve archived screen through render()', async () => {
+    createHttpServer = require('../src/http-server');
+    SessionManager = require('../src/session-manager');
+    const ArchiveManager = require('../src/archive-manager');
+    const os = require('os');
+    const fs = require('fs');
+    const path = require('path');
+
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'viz-http-'));
+    const archive = new ArchiveManager(tmpDir);
+    manager = new SessionManager({ timeoutMs: 0, archive });
+    const session = manager.create({ port: 0, url: '' });
+    manager.pushScreen(session.id, '<h2>Archived</h2>', 'test');
+
+    const { server } = createHttpServer(manager, session.id, archive);
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    const port = server.address().port;
+    servers.push(server);
+
+    const { body } = await httpGet(port, '/archive/1');
+    assert.ok(body.includes('<h2>Archived</h2>'), 'should contain archived content');
+    assert.ok(body.includes('window.__visualizerArchiveIndex = 1'), 'should inject archive index');
+    assert.ok(body.includes('viz-sidebar'), 'should inject sidebar');
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
   it('should broadcast reload to connected clients', async () => {
     createHttpServer = require('../src/http-server');
     SessionManager = require('../src/session-manager');

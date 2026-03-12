@@ -89,4 +89,63 @@ describe('MCP Tools', () => {
       /not found/
     );
   });
+
+  it('should accept title parameter in push_screen', async () => {
+    const os = require('os');
+    const fs = require('fs');
+    const path = require('path');
+    const ArchiveManager = require('../src/archive-manager');
+
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'viz-mcp-'));
+    const archive = new ArchiveManager(tmpDir);
+    manager = new SessionManager({ timeoutMs: 0, archive });
+    tools = createMcpTools(manager, archive);
+
+    const { session_id } = await tools.launch_session();
+    await tools.push_screen({ session_id, html: '<h2>Hi</h2>', title: 'greeting' });
+
+    const manifest = archive.getManifest(session_id);
+    assert.strictEqual(manifest.screens.length, 1);
+    assert.strictEqual(manifest.screens[0].title, 'greeting');
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('should generate gallery on close_session', async () => {
+    const os = require('os');
+    const fs = require('fs');
+    const path = require('path');
+    const ArchiveManager = require('../src/archive-manager');
+
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'viz-mcp-'));
+    const archive = new ArchiveManager(tmpDir);
+    manager = new SessionManager({ timeoutMs: 0, archive });
+    tools = createMcpTools(manager, archive);
+
+    const { session_id } = await tools.launch_session();
+    await tools.push_screen({ session_id, html: '<h2>Test</h2>', title: 'test' });
+    await tools.close_session({ session_id });
+
+    const galleryPath = path.join(archive.getArchiveDir(session_id), 'index.html');
+    assert.ok(fs.existsSync(galleryPath), 'gallery should be generated on close');
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('should expose generate_gallery tool', async () => {
+    const os = require('os');
+    const fs = require('fs');
+    const path = require('path');
+    const ArchiveManager = require('../src/archive-manager');
+
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'viz-mcp-'));
+    const archive = new ArchiveManager(tmpDir);
+    manager = new SessionManager({ timeoutMs: 0, archive });
+    tools = createMcpTools(manager, archive);
+
+    const { session_id } = await tools.launch_session();
+    await tools.push_screen({ session_id, html: '<h2>Test</h2>', title: 'test' });
+    const result = await tools.generate_gallery({ session_id });
+    assert.ok(result.path);
+    assert.ok(fs.existsSync(result.path));
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
 });
