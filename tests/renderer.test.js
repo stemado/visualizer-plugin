@@ -52,4 +52,24 @@ describe('renderer', () => {
     const full = renderer.render('<!DOCTYPE html><html><body><p>Hi</p></body></html>');
     assert.ok(full.includes('window.visualizer'), 'full doc output should include helper.js');
   });
+
+  it('should inject sidebar.js into output', () => {
+    renderer = require('../src/renderer');
+    const result = renderer.render('<h2>Test</h2>');
+    assert.ok(result.includes('viz-sidebar'), 'should include sidebar script');
+  });
+
+  it('should inject archiveIndex when provided', () => {
+    renderer = require('../src/renderer');
+    const result = renderer.render('<h2>Test</h2>', { archiveIndex: 3 });
+    assert.ok(result.includes('window.__visualizerArchiveIndex = 3'));
+  });
+
+  it('should export wrapInFrame', () => {
+    renderer = require('../src/renderer');
+    assert.ok(typeof renderer.wrapInFrame === 'function');
+    const wrapped = renderer.wrapInFrame('<h2>Test</h2>');
+    assert.ok(wrapped.includes('<h2>Test</h2>'));
+    assert.ok(wrapped.includes('<!DOCTYPE html>'));
+  });
 });

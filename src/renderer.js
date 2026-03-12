@@ -5,6 +5,8 @@ const path = require('path');
 const frameTemplate = fs.readFileSync(path.join(__dirname, 'frame-template.html'), 'utf-8');
 const helperScript = fs.readFileSync(path.join(__dirname, 'helper.js'), 'utf-8');
 const helperInjection = `<script>\n${helperScript}\n</script>`;
+const sidebarScript = fs.readFileSync(path.join(__dirname, 'sidebar.js'), 'utf-8');
+const sidebarInjection = `<script>\n${sidebarScript}\n</script>`;
 
 /**
  * Detect whether HTML content is a full document or a bare fragment.
@@ -31,13 +33,19 @@ function wrapInFrame(content) {
  * @param {string} html - Raw HTML content (fragment or full document)
  * @returns {string} - Ready-to-serve HTML
  */
-function render(html) {
+function render(html, options = {}) {
   let output = isFullDocument(html) ? html : wrapInFrame(html);
 
+  // Build injection string
+  let injection = helperInjection + '\n' + sidebarInjection;
+  if (typeof options.archiveIndex === 'number') {
+    injection = `<script>window.__visualizerArchiveIndex = ${options.archiveIndex};</script>\n` + injection;
+  }
+
   if (output.includes('</body>')) {
-    output = output.replace('</body>', `${helperInjection}\n</body>`);
+    output = output.replace('</body>', `${injection}\n</body>`);
   } else {
-    output += helperInjection;
+    output += injection;
   }
 
   return output;

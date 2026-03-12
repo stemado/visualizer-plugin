@@ -120,4 +120,114 @@ describe('SessionManager', () => {
     assert.strictEqual(manager.get(session.id), null);
     assert.strictEqual(manager.list().length, 0);
   });
+
+  describe('archive integration', () => {
+    it('should accept archive in constructor opts', () => {
+      const mockArchive = { save() {}, saveEvents() {}, closeSession() {} };
+      const m = new SessionManager({ timeoutMs: 0, archive: mockArchive });
+      assert.ok(m.archive === mockArchive);
+    });
+
+    it('should call archive.save on pushScreen with title', () => {
+      const saved = [];
+      const mockArchive = {
+        save(sid, html, title) { saved.push({ sid, html, title }); },
+        saveEvents() {},
+        closeSession() {},
+      };
+      const m = new SessionManager({ timeoutMs: 0, archive: mockArchive });
+      const session = m.create({ port: 0, url: '' });
+      m.pushScreen(session.id, '<h2>Hi</h2>', 'greeting');
+      assert.strictEqual(saved.length, 1);
+      assert.strictEqual(saved[0].html, '<h2>Hi</h2>');
+      assert.strictEqual(saved[0].title, 'greeting');
+    });
+
+    it('should save previous screen events before clearing on pushScreen', () => {
+      const savedEvents = [];
+      const mockArchive = {
+        save() {},
+        saveEvents(sid, idx, events) { savedEvents.push({ sid, idx, events: [...events] }); },
+        closeSession() {},
+      };
+      const m = new SessionManager({ timeoutMs: 0, archive: mockArchive });
+      const session = m.create({ port: 0, url: '' });
+      m.pushScreen(session.id, '<p>Screen 1</p>', 'one');
+      m.addEvent(session.id, { type: 'click', choice: 'a' });
+      m.addEvent(session.id, { type: 'click', choice: 'b' });
+
+      // Push screen 2 — should archive events from screen 1
+      m.pushScreen(session.id, '<p>Screen 2</p>', 'two');
+      assert.strictEqual(savedEvents.length, 1);
+      assert.strictEqual(savedEvents[0].idx, 1); // screen 1's index
+      assert.strictEqual(savedEvents[0].events.length, 2);
+    });
+
+    it('should not save events if there are none', () => {
+      const savedEvents = [];
+      const mockArchive = {
+        save() {},
+        saveEvents(sid, idx, events) { savedEvents.push({ sid, idx, events }); },
+        closeSession() {},
+      };
+      const m = new SessionManager({ timeoutMs: 0, archive: mockArchive });
+      const session = m.create({ port: 0, url: '' });
+      m.pushScreen(session.id, '<p>Screen 1</p>', 'one');
+      m.pushScreen(session.id, '<p>Screen 2</p>', 'two'); // no events on screen 1
+      assert.strictEqual(savedEvents.length, 0);
+    });
+
+    it('should call archive.closeSession on destroy with reason', () => {
+      const closed = [];
+      const mockArchive = {
+        save() {},
+        saveEvents() {},
+        closeSession(sid, reason, count) { closed.push({ sid, reason, count }); },
+      };
+      const m = new SessionManager({ timeoutMs: 0, archive: mockArchive });
+      const session = m.create({ port: 0, url: '' });
+      m.pushScreen(session.id, '<p>hi</p>', 'test');
+      m.destroy(session.id, 'explicit');
+      assert.strictEqual(closed.length, 1);
+      assert.strictEqual(closed[0].reason, 'explicit');
+      assert.strictEqual(closed[0].count, 1);
+    });
+
+    it('should save remaining events on destroy', () => {
+      const savedEvents = [];
+      const mockArchive = {
+        save() {},
+        saveEvents(sid, idx, events) { savedEvents.push({ sid, idx, events: [...events] }); },
+        closeSession() {},
+      };
+      const m = new SessionManager({ timeoutMs: 0, archive: mockArchive });
+      const session = m.create({ port: 0, url: '' });
+      m.pushScreen(session.id, '<p>hi</p>', 'test');
+      m.addEvent(session.id, { type: 'click', choice: 'x' });
+      m.destroy(session.id, 'explicit');
+      assert.strictEqual(savedEvents.length, 1);
+      assert.strictEqual(savedEvents[0].events.length, 1);
+    });
+
+    it('should reverse timer order: destroy before onTimeout', async () => {
+      const callOrder = [];
+      const mockArchive = {
+        save() {},
+        saveEvents() {},
+        closeSession() { callOrder.push('closeSession'); },
+      };
+      const m = new SessionManager({
+        timeoutMs: 50,
+        archive: mockArchive,
+        onTimeout: () => { callOrder.push('onTimeout'); },
+      });
+      const session = m.create({ port: 0, url: '' });
+
+      await new Promise(resolve => setTimeout(resolve, 120));
+
+      assert.strictEqual(m.get(session.id), null, 'session should be destroyed');
+      assert.strictEqual(callOrder[0], 'closeSession', 'destroy (closeSession) should fire before onTimeout');
+      assert.strictEqual(callOrder[1], 'onTimeout');
+    });
+  });
 });

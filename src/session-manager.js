@@ -6,7 +6,7 @@ const MAX_SESSIONS = 5;
 
 class SessionManager {
   /**
-   * @param {{ timeoutMs?: number, maxSessions?: number, onTimeout?: (id: string) => void }} [opts]
+   * @param {{ timeoutMs?: number, maxSessions?: number, onTimeout?: (id: string) => void, archive?: import('./archive-manager') }} [opts]
    */
   constructor(opts = {}) {
     /** @type {Map<string, Session>} */
@@ -14,6 +14,7 @@ class SessionManager {
     this.timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.maxSessions = opts.maxSessions ?? MAX_SESSIONS;
     this.onTimeout = opts.onTimeout || null;
+    this.archive = opts.archive || null;
     /** @type {Map<string, NodeJS.Timeout>} */
     this._timers = new Map();
   }
@@ -30,8 +31,8 @@ class SessionManager {
     // Set new timer
     if (this.timeoutMs > 0) {
       const timer = setTimeout(() => {
+        this.destroy(id, 'timeout');
         if (this.onTimeout) this.onTimeout(id);
-        this.destroy(id);
       }, this.timeoutMs);
       timer.unref(); // Don't block process exit
       this._timers.set(id, timer);
@@ -96,13 +97,24 @@ class SessionManager {
    * Push a new screen to the session. Clears events.
    * @param {string} id
    * @param {string} html
+   * @param {string} [title]
    */
-  pushScreen(id, html) {
+  pushScreen(id, html, title) {
     const session = this.sessions.get(id);
     if (!session) throw new Error(`Session ${id} not found`);
+    // Archive events from previous screen before clearing
+    if (this.archive && session.screenIndex > 0 && session.events.length > 0) {
+      try { this.archive.saveEvents(id, session.screenIndex, session.events); }
+      catch (e) { console.warn('[session] archive saveEvents failed:', e.message); }
+    }
     session.currentHtml = html;
     session.screenIndex++;
     session.events = [];
+    // Archive the new screen
+    if (this.archive) {
+      try { this.archive.save(id, html, title); }
+      catch (e) { console.warn('[session] archive save failed:', e.message); }
+    }
     this._touch(id);
   }
 
@@ -143,8 +155,21 @@ class SessionManager {
     return events;
   }
 
-  /** @param {string} id */
-  destroy(id) {
+  /**
+   * @param {string} id
+   * @param {string} [reason='explicit']
+   */
+  destroy(id, reason = 'explicit') {
+    const session = this.sessions.get(id);
+    if (session && this.archive) {
+      // Save remaining events for last screen
+      if (session.screenIndex > 0 && session.events.length > 0) {
+        try { this.archive.saveEvents(id, session.screenIndex, session.events); }
+        catch (e) { console.warn('[session] archive saveEvents failed:', e.message); }
+      }
+      try { this.archive.closeSession(id, reason, session.screenIndex); }
+      catch (e) { console.warn('[session] archive closeSession failed:', e.message); }
+    }
     const timer = this._timers.get(id);
     if (timer) {
       clearTimeout(timer);
