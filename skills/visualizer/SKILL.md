@@ -7,6 +7,17 @@ description: Create interactive HTML visualizations in a browser window — arch
 
 Push interactive HTML visualizations to a browser window. The user sees rich visual content — diagrams, mockups, comparisons — while continuing to work in the terminal.
 
+## Feedback loop
+
+**On session start:** Read `feedback.log` (in this skill's directory) before doing anything else.
+Apply all logged preferences to the current session.
+
+**During the session:** When the user corrects your approach or states a preference:
+1. Apply the correction immediately.
+2. Determine if it's a **general preference** (applies to future sessions) or **context-specific** (only relevant now).
+3. If general, append it to `feedback.log` immediately. Use judgment on detail — some entries are one line, others need a sentence or two of context to be actionable later.
+4. Skip anything that only matters for the current task.
+
 ## When to Use
 
 When the user asks to **see** something, not just read about it:
