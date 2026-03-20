@@ -6,7 +6,7 @@
   "plugins": [
     {
       "name": "visualizer",
-      "version": "0.1.0",
+      "version": "0.2.1",
       "source": "./",
       "description": "Interactive HTML visualization companion — push diagrams, mockups, and explorers to a browser window",
       "keywords": ["visualization", "html", "diagrams", "mockups", "browser", "mcp"]
